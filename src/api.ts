@@ -1,6 +1,8 @@
 import { Router } from "express";
 import moment from "moment";
+import { GAME_START_KEY, ROOM_START_KEY } from "./consts";
 import { prisma } from "./prisma";
+import redisClient from "./redis";
 
 const router = Router();
 
@@ -75,6 +77,55 @@ router.post("/save-questions", async (req, res) => {
     message: "Questions added successfully",
     status: "success",
   });
+});
+
+router.post("/game-time", async (req, res) => {
+  await redisClient.connect();
+  const roomStartHour = req.body.roomStartHour;
+  const roomStartMinutes = req.body.roomStartMinute;
+
+  const gameStartHour = req.body.gameStartHour;
+  const gameStartMinutes = req.body.gameStartMinute;
+
+  await redisClient.set(GAME_START_KEY, `${gameStartHour}:${gameStartMinutes}`);
+  await redisClient.set(ROOM_START_KEY, `${roomStartHour}:${roomStartMinutes}`);
+
+  await redisClient.disconnect();
+  return res.json({
+    message: "Game time set successfully",
+    status: "success",
+  });
+});
+
+router.get("/game-time", async (_, res) => {
+  try {
+    await redisClient.connect();
+    const gameStart = await redisClient.get(GAME_START_KEY);
+    const roomStart = await redisClient.get(ROOM_START_KEY);
+
+    console.log(gameStart, roomStart);
+
+    if (!gameStart || !roomStart) {
+      await redisClient.disconnect();
+      return res.json({
+        message: "Game time not set",
+        status: "error",
+      });
+    }
+
+    return res.json({
+      gameStart,
+      roomStart,
+    });
+  } catch (error) {
+    console.log(error);
+    return res.json({
+      message: "Game time not set",
+      status: "error",
+    });
+  } finally {
+    await redisClient.disconnect();
+  }
 });
 
 export default router;
